@@ -224,12 +224,23 @@
       addPills();
     }
 
+    function formatText(text) {
+      return text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/^### (.+)$/gm, '<h3 style="font-size:15px;font-weight:700;margin:10px 0 4px;color:#1a1a2e">$1</h3>')
+        .replace(/^## (.+)$/gm, '<h2 style="font-size:16px;font-weight:700;margin:10px 0 4px;color:#1a1a2e">$1</h2>')
+        .replace(/^- (.+)$/gm, '<li style="margin:4px 0;padding-left:4px">$1</li>')
+        .replace(/(<li.*<\/li>)/gs, '<ul style="padding-left:18px;margin:6px 0">$1</ul>')
+        .replace(/\n\n/g, '<br><br>')
+        .replace(/\n/g, '<br>');
+    }
+
     function addMessage(role, text) {
       const chat = document.getElementById('chat');
       const div = document.createElement('div');
       div.className = `message ${role}`;
       if (role === 'assistant') {
-        div.innerHTML = `<div class="msg-avatar">👩</div><div class="bubble assistant">${text}</div>`;
+        div.innerHTML = `<div class="msg-avatar">👩</div><div class="bubble assistant">${formatText(text)}</div>`;
       } else {
         div.innerHTML = `<div class="bubble user">${text}</div>`;
       }
