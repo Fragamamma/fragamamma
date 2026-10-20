@@ -3,7 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Fråga mamma</title>
+  <title>Fråga mamma – hjälp för unga vuxna</title>
+
+  <!-- Meta-taggar för Google -->
+  <meta name="description" content="Fråga mamma – en AI-driven guide för unga vuxna som flyttar hemifrån. Få svar om ekonomi, jobb, A-kassa, försäkringar, boende, psykisk hälsa och mycket mer." />
+  <meta name="keywords" content="fråga mamma, flytta hemifrån, unga vuxna, ekonomi, A-kassa, försäkringskassan, boende, psykisk hälsa, jobb" />
+  <meta name="robots" content="index, follow" />
+  <meta property="og:title" content="Fråga mamma – hjälp för unga vuxna" />
+  <meta property="og:description" content="Få svar på allt du undrar om vuxenlivet – som att fråga en klok mamma." />
+  <meta property="og:url" content="https://www.fragamamma.se" />
+
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -83,7 +92,6 @@
     .bubble {
       max-width: 75%; border-radius: 20px;
       padding: 13px 18px; font-size: 15px; line-height: 1.7;
-      white-space: pre-wrap;
     }
     .bubble.user {
       background: linear-gradient(135deg, #6366f1, #8b5cf6);
@@ -97,7 +105,7 @@
       border: 1px solid #f0f0f8;
     }
 
-    .typing-dots { display: flex; gap: 5px; align-items: center; padding: 14px 20px; }
+    .typing-dots { display: flex; gap: 5px; align-items: center; padding: 4px 0; }
     .typing-dot {
       width: 8px; height: 8px; border-radius: 50%; background: #c084fc;
       animation: bounce 1.2s ease-in-out infinite;
@@ -179,6 +187,17 @@
 
     let messages = [];
 
+    function formatText(text) {
+      return text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/^### (.+)$/gm, '<h3 style="font-size:15px;font-weight:700;margin:10px 0 4px;color:#1a1a2e">$1</h3>')
+        .replace(/^## (.+)$/gm, '<h2 style="font-size:16px;font-weight:700;margin:10px 0 4px;color:#1a1a2e">$1</h2>')
+        .replace(/^- (.+)$/gm, '<li style="margin:4px 0;padding-left:4px">$1</li>')
+        .replace(/(<li.*<\/li>)/gs, '<ul style="padding-left:18px;margin:6px 0">$1</ul>')
+        .replace(/\n\n/g, '<br><br>')
+        .replace(/\n/g, '<br>');
+    }
+
     function askCategory(cat) {
       sendMessage(`Kan du berätta om ${cat.toLowerCase()}? Vad behöver jag veta som ung vuxen?`);
     }
@@ -198,50 +217,63 @@
       const sendBtn = document.getElementById('sendBtn');
       sendBtn.disabled = true;
 
-      const typingDiv = document.createElement('div');
-      typingDiv.className = 'message';
-      typingDiv.innerHTML = `<div class="msg-avatar">👩</div><div class="bubble assistant"><div class="typing-dots"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div></div>`;
-      document.getElementById('chat').appendChild(typingDiv);
-      typingDiv.scrollIntoView({ behavior: 'smooth' });
+      // Skapa bubbla med typing-animation
+      const chat = document.getElementById('chat');
+      const msgDiv = document.createElement('div');
+      msgDiv.className = 'message';
+      msgDiv.innerHTML = `<div class="msg-avatar">👩</div><div class="bubble assistant"><div class="typing-dots"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div></div>`;
+      chat.appendChild(msgDiv);
+      msgDiv.scrollIntoView({ behavior: 'smooth' });
+
+      const bubble = msgDiv.querySelector('.bubble');
 
       try {
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1000, system: SYSTEM_PROMPT, messages }),
+          body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1000, system: SYSTEM_PROMPT, messages, stream: true }),
         });
-        const data = await res.json();
-        const reply = data.content?.[0]?.text || 'Något gick fel, försök igen!';
-        typingDiv.remove();
-        addMessage('assistant', reply);
-        messages.push({ role: 'assistant', content: reply });
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let fullText = '';
+        bubble.innerHTML = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value);
+          const lines = chunk.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              if (data === '[DONE]') break;
+              try {
+                const json = JSON.parse(data);
+                const delta = json.delta?.text || '';
+                if (delta) {
+                  fullText += delta;
+                  bubble.innerHTML = formatText(fullText);
+                  chat.scrollTop = chat.scrollHeight;
+                }
+              } catch {}
+            }
+          }
+        }
+        messages.push({ role: 'assistant', content: fullText });
       } catch {
-        typingDiv.remove();
-        addMessage('assistant', 'Något gick fel 💛 Försök igen!');
+        bubble.innerHTML = 'Något gick fel 💛 Försök igen!';
       }
 
       sendBtn.disabled = false;
       addPills();
     }
 
-    function formatText(text) {
-      return text
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/^### (.+)$/gm, '<h3 style="font-size:15px;font-weight:700;margin:10px 0 4px;color:#1a1a2e">$1</h3>')
-        .replace(/^## (.+)$/gm, '<h2 style="font-size:16px;font-weight:700;margin:10px 0 4px;color:#1a1a2e">$1</h2>')
-        .replace(/^- (.+)$/gm, '<li style="margin:4px 0;padding-left:4px">$1</li>')
-        .replace(/(<li.*<\/li>)/gs, '<ul style="padding-left:18px;margin:6px 0">$1</ul>')
-        .replace(/\n\n/g, '<br><br>')
-        .replace(/\n/g, '<br>');
-    }
-
     function addMessage(role, text) {
       const chat = document.getElementById('chat');
       const div = document.createElement('div');
       div.className = `message ${role}`;
-      if (role === 'assistant') {
-        div.innerHTML = `<div class="msg-avatar">👩</div><div class="bubble assistant">${formatText(text)}</div>`;
-      } else {
+      if (role === 'user') {
         div.innerHTML = `<div class="bubble user">${text}</div>`;
       }
       chat.appendChild(div);
